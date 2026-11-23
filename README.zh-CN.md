@@ -6,7 +6,7 @@
 
 把本机已安装并登录的 AI 编程 CLI 作为模型接入 [Pi](https://github.com/earendil-works/pi)。
 
-Pi 以子进程方式启动 CLI，并通过 stdio 使用它自己的协议：Codex 走 App Server，其余走 ACP。CLI 使用自己的登录状态直接访问自己的供应商；插件不读取登录令牌、不代理账号，也不需要 Magpie 或 Bun。**本地启动 CLI 不等于离线推理。**
+Pi 以子进程方式启动 CLI，并通过 stdio 使用它自己的协议：Codex 走 App Server，其余走 ACP。CLI 使用自己的登录状态直接访问自己的供应商。推理不读取登录令牌，也不代理账号。Claude 配额只来自官方命令。Grok 的最后一道配额回退可能读取它自己的登录文件，但不保存、不记录、不展示令牌。不需要 Magpie 或 Bun。**本地启动 CLI 不等于离线推理。**
 
 [English](./README.md)
 
@@ -83,7 +83,7 @@ local-cli/<agent>-default          由 CLI 决定使用哪个模型
 | `/local-cli status` | 当前会话上一轮正在做什么 |
 | `/local-cli doctor` | 可执行文件、目录来源、桥接、恢复设置和最近一轮状态 |
 | `/local-cli doctor probe` | 立即查询目录（不推理，不修改启用列表） |
-| `/local-cli usage` | 上下文占用、最近一次推理用量、整轮累计、Claude 配额，以及 Antigravity `/usage` |
+| `/local-cli usage` | 上下文占用、最近一次推理用量、整轮累计，以及各 CLI 的官方配额 |
 
 ## 配置
 

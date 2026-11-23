@@ -7,7 +7,7 @@
 
 Use the AI coding CLIs you already have installed and signed in to as models inside [Pi](https://github.com/earendil-works/pi).
 
-Pi starts each CLI as a child process and speaks its native protocol over stdio — Codex App Server for Codex, ACP for the rest. The CLI keeps its own login and talks to its own vendor; this extension never reads credentials, never proxies an account, and needs no Magpie or Bun runtime. **Running a CLI locally is not the same as running a model offline.**
+Pi starts each CLI as a child process and speaks its native protocol over stdio — Codex App Server for Codex, ACP for the rest. The CLI keeps its own login and talks to its own vendor. Inference never reads credentials or proxies an account. Claude quota comes only from the official CLI command. Grok's last quota fallback may read its own login file, but it does not store, log, or show the token. No Magpie or Bun runtime is required. **Running a CLI locally is not the same as running a model offline.**
 
 [中文说明](./README.zh-CN.md)
 
@@ -84,7 +84,7 @@ Model discovery runs through the same protocol Pi uses for chat, so no extra log
 | `/local-cli status` | What the current session's last turn is doing |
 | `/local-cli doctor` | Executables, catalog source, bridge, resume setting, and last turn |
 | `/local-cli doctor probe` | Query catalogs now (no inference, does not change enabled models) |
-| `/local-cli usage` | Context occupancy, last-inference usage, turn total, Claude quota, and Antigravity `/usage` |
+| `/local-cli usage` | Context occupancy, last inference, turn total, and official CLI quota |
 
 ## Configuration
 

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { formatDiagnostics, formatUsage, parseAgyQuota, quotaFromClaude } from '../lib/usage-display.mjs';
+import { formatDiagnostics, formatUsage, parseAgyQuota, parseClaudeOAuthUsage, parseClaudeQuota, parseCodexQuota, parseGrokBilling, parseGrokQuota, quotaFromClaude } from '../lib/usage-display.mjs';
 
 test('labels CLI context, last-inference estimates and turn totals separately', () => {
   const stats = { model: 'fixture', at: 0, context: { size: 900 },
@@ -34,4 +34,17 @@ test('labels CLI context, last-inference estimates and turn totals separately', 
   assert.match(agy, /Gemini Models · 5h: 98% left/);
   assert.doesNotMatch(agy, /private@example.com|weekly/);
   assert.equal(parseAgyQuota(JSON.stringify({ command: { name: 'prompt' } })), undefined);
+  const codex = parseCodexQuota({ accountId: 'acct_private', rateLimits: {
+    primary: { usedPercent: 1, windowDurationMins: 300, resetsAt: Date.parse('2026-09-04T19:53:00') / 1000 },
+    secondary: { usedPercent: 45, windowDurationMins: 10080, resetsAt: Date.parse('2026-09-11T09:10:00') / 1000 },
+  } }, now);
+  assert.match(codex, /Codex 5h: 99% left/);
+  assert.match(codex, /Codex 7d: 55% left/);
+  assert.doesNotMatch(codex, /acct_private/);
+  assert.equal(parseClaudeQuota('Not logged in · Please run /login'), undefined);
+  assert.match(parseClaudeQuota('5-hour limit: 12% used\n7-day limit: 40% used'), /Claude 5h: 88% left[\s\S]*Claude 7d: 60% left/);
+  assert.match(parseGrokQuota(JSON.stringify({ usage: { type: 'weekly', remainingPercent: 70, resetAt: '2026-09-11T09:10:00' } }), now), /Grok weekly: 70% left/);
+  assert.match(parseGrokBilling({ config: { creditUsagePercent: 30, currentPeriod: { type: 'USAGE_PERIOD_TYPE_WEEKLY', end: '2026-09-11T09:10:00Z' } } }, now), /Grok weekly: 70% left/);
+  assert.match(parseClaudeOAuthUsage({ five_hour: { utilization: 12, resets_at: '2026-09-04T19:53:00Z' }, seven_day: { utilization: 40, resets_at: '2026-09-11T09:10:00Z' } }, now), /Claude 5h: 88% left/);
+  assert.doesNotMatch(parseClaudeOAuthUsage({ five_hour: { utilization: 12, resets_at: '2026-09-04T19:53:00Z' }, email: 'private@example.com' }, now), /private@example.com/);
 });

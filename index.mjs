@@ -6,6 +6,7 @@ import { createBridgeServer } from './lib/bridge-server.mjs';
 import { catalogModels, restoreCatalog } from './lib/catalog.mjs';
 import { codexContextWindows } from './lib/codex-metadata.mjs';
 import { readAgyQuota } from './lib/agy-catalog.mjs';
+import { readCliQuotas } from './lib/cli-quota.mjs';
 import { listAgents } from './lib/launch.mjs';
 import { formatDiagnostics, formatUsage } from './lib/usage-display.mjs';
 import { baseURL, createBackend, providerId } from './lib/provider.mjs';
@@ -132,13 +133,14 @@ export default function (pi) {
       if (action === 'usage') {
         const stats = backend.lastUsage(ctx.sessionManager.getSessionId());
         const estimate = ctx.model?.provider === providerId && ctx.model.id === stats?.model ? ctx.getContextUsage() : undefined;
-        let agy;
-        if (installed().some(({ id }) => id === 'antigravity')) {
-          ctx.ui.notify('Checking Antigravity quota…', 'info');
-          agy = await readAgyQuota(root, AbortSignal.timeout(10000));
-        }
-        const text = formatUsage(stats, estimate, { omitQuotaNote: Boolean(agy && !agy.startsWith('Antigravity quota: not')) });
-        ctx.ui.notify(agy ? `${text}\n${agy}` : text, 'info');
+        const present = installed();
+        ctx.ui.notify('Checking CLI quota…', 'info');
+        const signal = AbortSignal.timeout(12000);
+        const quotas = await readCliQuotas(root, present.map(({ id }) => id), signal);
+        if (present.some(({ id }) => id === 'antigravity')) quotas.push(await readAgyQuota(root, signal));
+        const reported = quotas.some((line) => line && !/quota: not (?:reported|available)/.test(line));
+        const text = formatUsage(stats, estimate, { omitQuotaNote: reported });
+        ctx.ui.notify([text, ...quotas].filter(Boolean).join('\n'), 'info');
         return;
       }
       if (action && action !== 'doctor' && action !== 'doctor probe') {
