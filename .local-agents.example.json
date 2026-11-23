@@ -1,0 +1,9 @@
+{
+  "executables": {
+    "codex": "D:/Tools/Codex/codex.exe",
+    "claude": "D:/Tools/Claude/claude.exe",
+    "claudeAdapter": "D:/Tools/Claude/claude-agent-acp.exe",
+    "antigravity": "D:/Tools/Antigravity/agy.exe",
+    "grok": "D:/Tools/Grok/grok.exe"
+  }
+}
