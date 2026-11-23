@@ -113,6 +113,51 @@ Claude Code itself must be a native executable; only the ACP adapter may be an n
 
 The executable config belongs to the extension user. It is never read from the project being worked on: only configure binaries and scripts you trust, because they run as you.
 
+## Design
+
+The CLI is only the brain. Pi keeps the scaffolding: conversation state, tools, permissions, hooks and result rendering. The extension does not call the CLI's built-in file, shell or web tools, and it does not store the CLI's login.
+
+```mermaid
+flowchart LR
+  Pi["Pi<br/>session, tools, permissions"]
+  Adapter["In-process adapter"]
+  CLI["Local CLI<br/>inference only"]
+  Vendor["Vendor API"]
+  Pi -->|chat request| Adapter
+  Adapter -->|stdio protocol| CLI
+  CLI -->|model call| Vendor
+  CLI -->|tool request| Adapter
+  Adapter -->|Pi executes once| Pi
+```
+
+| Responsibility | Owner |
+|---|---|
+| Model inference and vendor login | The installed CLI |
+| Tools, permissions, hooks and rendering | Pi |
+| Protocol translation and parked tool delivery | This extension |
+| Built-in CLI file, shell and web tools | Disabled or denied |
+
+A tool call does not leave Pi's loop:
+
+```mermaid
+sequenceDiagram
+  participant Pi
+  participant Adapter
+  participant CLI
+  Pi->>Adapter: Chat Completions request
+  Adapter->>CLI: prompt over stdio
+  CLI-->>Adapter: tool call
+  Note over CLI: native turn parks
+  Adapter-->>Pi: tool_calls
+  Pi->>Pi: run the tool once
+  Pi->>Adapter: tool result
+  Adapter->>CLI: deliver it to the same parked call
+  CLI-->>Adapter: assistant text
+  Adapter-->>Pi: completion
+```
+
+If that parked call is lost, the result is not sent again. A later message starts a new turn instead of replaying work that may already have run.
+
 ## How it works
 
 ```

@@ -112,6 +112,51 @@ Claude Code 本体必须是原生可执行文件；只有 ACP 适配器可以是
 
 可执行文件配置属于插件使用者，不会从当前项目读取覆盖。只配置你信任的二进制和脚本，它们以你的身份运行。
 
+## 设计原则
+
+CLI 只作为大脑。Pi 保留手脚架：对话状态、工具、权限、钩子和结果渲染。插件不调用 CLI 自带的文件、命令或网页工具，也不保存 CLI 的登录状态。
+
+```mermaid
+flowchart LR
+  Pi["Pi<br/>会话、工具、权限"]
+  Adapter["进程内适配层"]
+  CLI["本地 CLI<br/>只负责推理"]
+  Vendor["供应商 API"]
+  Pi -->|聊天请求| Adapter
+  Adapter -->|stdio 协议| CLI
+  CLI -->|模型调用| Vendor
+  CLI -->|工具请求| Adapter
+  Adapter -->|Pi 执行一次| Pi
+```
+
+| 职责 | 归属 |
+|---|---|
+| 模型推理与供应商登录 | 本机已安装的 CLI |
+| 工具、权限、钩子和渲染 | Pi |
+| 协议转换与挂起工具的结果交回 | 本插件 |
+| CLI 自带的文件、命令和网页工具 | 关闭或拒绝 |
+
+一次工具调用不会离开 Pi 的循环：
+
+```mermaid
+sequenceDiagram
+  participant Pi
+  participant Adapter as 适配层
+  participant CLI
+  Pi->>Adapter: Chat Completions 请求
+  Adapter->>CLI: 通过 stdio 发送提示
+  CLI-->>Adapter: 工具调用
+  Note over CLI: 原生轮次挂起
+  Adapter-->>Pi: tool_calls
+  Pi->>Pi: 执行一次工具
+  Pi->>Adapter: 工具结果
+  Adapter->>CLI: 交回同一个挂起的调用
+  CLI-->>Adapter: 回复文本
+  Adapter-->>Pi: 完成
+```
+
+如果挂起的调用已经丢失，结果不会再次发送。后续消息会开启新轮次，而不是重放可能已经执行过的操作。
+
 ## 工作原理
 
 ```
