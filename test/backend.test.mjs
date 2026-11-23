@@ -137,6 +137,16 @@ test('waiting longer than the inference budget still delivers results to the par
   assert.equal(backend.turnStatus('session-a').phase, 'done');
 });
 
+test('a long Pi tool is reported as still running without ending the wait', async (t) => {
+  const { chat, backend } = await harness(t, 'normal', { stillRunningMs: 40, toolWaitMs: 8000 });
+  const next = await startTool(chat);
+  await delay(80);
+  assert.equal(backend.turnStatus('session-a').phase, 'still-running');
+  assert.match(backend.turnStatus('session-a').detail, /still running/);
+  const result = await chat(next);
+  assert.equal(result.status, 200);
+});
+
 test('expired tool waits are rejected without replay', async (t) => {
   const { chat, backend } = await harness(t, 'normal', { toolWaitMs: 180 });
   const next = await startTool(chat);

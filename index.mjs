@@ -5,8 +5,9 @@ import { openAICompletionsApi } from '@earendil-works/pi-ai/compat';
 import { createBridgeServer } from './lib/bridge-server.mjs';
 import { catalogModels, restoreCatalog } from './lib/catalog.mjs';
 import { codexContextWindows } from './lib/codex-metadata.mjs';
+import { readAgyQuota } from './lib/agy-catalog.mjs';
 import { listAgents } from './lib/launch.mjs';
-import { formatUsage } from './lib/usage-display.mjs';
+import { formatDiagnostics, formatUsage } from './lib/usage-display.mjs';
 import { baseURL, createBackend, providerId } from './lib/provider.mjs';
 
 const root = fileURLToPath(new URL('./', import.meta.url));
@@ -50,8 +51,8 @@ export default function (pi) {
     onProgress(caller, { phase, detail }) {
       const ctx = sessionContext;
       if (!ctx?.hasUI || ctx.sessionManager.getSessionId() !== caller) return;
-      ctx.ui.setStatus('local-cli', ['running', 'waiting'].includes(phase) ? `Local CLI: ${detail}` : undefined);
-      if (phase === 'waiting' || phase === 'lost') {
+      ctx.ui.setStatus('local-cli', ['running', 'waiting', 'still-running'].includes(phase) ? `Local CLI: ${detail}` : undefined);
+      if (phase === 'waiting' || phase === 'still-running' || phase === 'lost') {
         ctx.ui.notify(`Local CLI: ${detail}`, phase === 'lost' ? 'warning' : 'info');
       }
     },
@@ -131,7 +132,13 @@ export default function (pi) {
       if (action === 'usage') {
         const stats = backend.lastUsage(ctx.sessionManager.getSessionId());
         const estimate = ctx.model?.provider === providerId && ctx.model.id === stats?.model ? ctx.getContextUsage() : undefined;
-        ctx.ui.notify(formatUsage(stats, estimate), 'info');
+        let agy;
+        if (installed().some(({ id }) => id === 'antigravity')) {
+          ctx.ui.notify('Checking Antigravity quota…', 'info');
+          agy = await readAgyQuota(root, AbortSignal.timeout(10000));
+        }
+        const text = formatUsage(stats, estimate, { omitQuotaNote: Boolean(agy && !agy.startsWith('Antigravity quota: not')) });
+        ctx.ui.notify(agy ? `${text}\n${agy}` : text, 'info');
         return;
       }
       if (action && action !== 'doctor' && action !== 'doctor probe') {
@@ -158,6 +165,11 @@ export default function (pi) {
           : 'no catalog — use Refresh Model Catalog or /local-cli doctor probe';
         return `${label}: ${result}${attempt?.note ? ` (last check: ${attempt.note})` : ''}`;
       });
+      if (action) lines.push(formatDiagnostics({
+        resumeEnabled: process.env.PI_LOCAL_CLI_AGY_RESUME !== '0',
+        bridge: mcp.status(),
+        status: backend.turnStatus(ctx.sessionManager.getSessionId()),
+      }));
       ctx.ui.notify(lines.join('\n'), 'info');
     },
   });

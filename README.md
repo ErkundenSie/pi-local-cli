@@ -82,9 +82,9 @@ Model discovery runs through the same protocol Pi uses for chat, so no extra log
 |---|---|
 | `/local-cli` | Detected executables |
 | `/local-cli status` | What the current session's last turn is doing |
-| `/local-cli doctor` | Executables, catalog source, last success and last failure |
+| `/local-cli doctor` | Executables, catalog source, bridge, resume setting, and last turn |
 | `/local-cli doctor probe` | Query catalogs now (no inference, does not change enabled models) |
-| `/local-cli usage` | Context occupancy, last-inference usage and turn total |
+| `/local-cli usage` | Context occupancy, last-inference usage, turn total, Claude quota, and Antigravity `/usage` |
 
 ## Configuration
 
@@ -128,7 +128,7 @@ Pi  ──Chat Completions──▶  in-process adapter  ──stdio JSON-RPC─
 
 ### Timeouts
 
-Inference is capped at 5 minutes per native turn, measured only while the CLI is generating. Waiting for a Pi tool pauses that budget and has its own 10-minute limit, still bounded by any shorter CLI limit. Pi Web shows when a turn is waiting or has lost its bridge connection.
+Inference is capped at 5 minutes per native turn, measured only while the CLI is generating. Waiting for a Pi tool pauses that budget and has its own 10-minute limit, still bounded by any shorter CLI limit. Pi Web shows when a turn is waiting, still running after 20 seconds, or has lost its bridge connection.
 
 If a result can no longer be delivered — bridge lost, wait expired, turn cancelled — the request fails instead of silently replaying. Check the tool output already in the conversation before sending a new message.
 
