@@ -99,18 +99,21 @@ test('parks a real MCP round-trip and resumes only the matching Pi conversation'
   };
   const wrong = await chat(followUp, undefined, 'session-b');
   assert.equal(wrong.status, 409);
-  const edited = structuredClone(followUp);
-  edited.messages[0].content = 'Different branch';
-  assert.equal((await chat(edited)).status, 409);
-  const answer = await (await chat(followUp)).json();
-  assert.equal(answer.choices[0].message.content, '; tool said 42');
-  assert.equal(answer.usage.total_tokens, 120);
+  const loaded = structuredClone(followUp);
+  loaded.tools = [lookup, { type: 'function', function: { name: 'ssh', parameters: { type: 'object' } } }];
+  loaded.messages[1] = { ...loaded.messages[1], reasoning_content: 'check the server' };
+  loaded.messages[0] = { ...loaded.messages[0], content: 'Pi reconstructed the prefix' };
+  const deliveredResponse = await chat(loaded);
+  const delivered = await deliveredResponse.json();
+  assert.equal(deliveredResponse.status, 200);
+  assert.match(delivered.choices[0].message.content, /tool said 42/);
+  assert.equal(delivered.usage.total_tokens, 120);
+  assert.equal((await chat(followUp)).status, 409);
   const stats = backend.lastUsage('session-a');
   assert.equal(stats.usageSource, 'codex-last');
   assert.equal(stats.turnUsage.total_tokens, 240);
   assert.equal(stats.context.size, 500_000);
   assert.equal(backend.lastUsage('unrelated'), undefined);
-  assert.equal((await chat(followUp)).status, 409);
 });
 
 async function startTool(chat, content = 'lookup', signal) {

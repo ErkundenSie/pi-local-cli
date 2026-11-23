@@ -53,8 +53,8 @@ export default function (pi) {
       const ctx = sessionContext;
       if (!ctx?.hasUI || ctx.sessionManager.getSessionId() !== caller) return;
       ctx.ui.setStatus('local-cli', ['running', 'waiting', 'still-running'].includes(phase) ? `Local CLI: ${detail}` : undefined);
-      if (phase === 'waiting' || phase === 'still-running' || phase === 'lost') {
-        ctx.ui.notify(`Local CLI: ${detail}`, phase === 'lost' ? 'warning' : 'info');
+      if (phase === 'lost' || phase === 'error' || phase === 'cancelled') {
+        ctx.ui.notify(`Local CLI: ${detail}`, phase === 'lost' ? 'warning' : 'error');
       }
     },
   });
