@@ -1,60 +1,94 @@
-# Pi Local CLI
+# pi-local-cli
 
-在 Pi 的 `/model` 中选择本机已安装的 AI CLI。Pi 通过 stdio 与 CLI 通信；CLI 仍使用自己的登录状态和供应商服务。插件不读取登录令牌、不代理账号，也不要求安装 Magpie 或 Bun。**本地启动 CLI 不等于离线推理。**
+[![tests](https://github.com/ErkundenSie/pi-local-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/ErkundenSie/pi-local-cli/actions/workflows/ci.yml)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+[![node](https://img.shields.io/badge/node-%E2%89%A522-3c873a.svg)](https://nodejs.org)
+[![pi-package](https://img.shields.io/badge/pi-package-7c3aed.svg)](https://pi.dev/packages)
 
-| CLI | 协议 | Pi 默认模型 |
+Use the AI coding CLIs you already have installed and signed in to as models inside [Pi](https://github.com/earendil-works/pi).
+
+Pi starts each CLI as a child process and speaks its native protocol over stdio — Codex App Server for Codex, ACP for the rest. The CLI keeps its own login and talks to its own vendor; this extension never reads credentials, never proxies an account, and needs no Magpie or Bun runtime. **Running a CLI locally is not the same as running a model offline.**
+
+[中文说明](./README.zh-CN.md)
+
+## Features
+
+- **Real model picker entries.** `/model` lists each CLI as `local-cli/<agent>-<model>`, with native model IDs discovered from the CLI itself.
+- **Native streaming.** Assistant text, reasoning text and token usage stream through as the CLI produces them.
+- **Pi tools stay in Pi.** Tools declared by the Pi session are exposed to the CLI as a local MCP server. The CLI calls them natively; Pi executes each call once with its own permissions, hooks and result rendering.
+- **Session reuse, not repeated history.** A live native session is reused while the model, thinking level, tool set and history prefix all match. Anything else replays the history in a fresh session.
+- **Antigravity resume across restarts.** A completed `agy` session can be picked up after Pi or the CLI restarts, sending only the new messages.
+- **Honest accounting.** Context occupancy, last-inference usage and whole-turn totals are reported separately instead of being conflated.
+- **Failures that do not duplicate work.** A tool result that can no longer be delivered is reported, never replayed.
+
+## Supported CLIs
+
+| Agent | Launched as | Preparation |
 |---|---|---|
-| OpenAI Codex | Codex App Server | `local-cli/codex-default` |
-| Claude Code + `@agentclientprotocol/claude-agent-acp` | ACP | `local-cli/claude-default` |
-| Google Antigravity CLI (`agy`) | ACP | `local-cli/antigravity-default` |
-| Grok Build (`grok`) | ACP | `local-cli/grok-default` |
+| OpenAI Codex | `codex app-server --listen stdio://` | Install Codex and sign in with `codex login` |
+| Claude Code | `claude-agent-acp` wrapping your `claude` | Install native Claude Code, then `npm install -g @agentclientprotocol/claude-agent-acp` |
+| Google Antigravity CLI | `agy acp` | Install Antigravity CLI and sign in with `agy` |
+| Grok Build | `grok agent --no-leader stdio` | Install Grok Build and run `grok login` |
 
-## 安装与使用
+A detected executable is not proof of a working sign-in; run `/local-cli doctor` for the current state.
 
-需要 Node.js ≥22 和支持原生 provider 注册及自定义 fetch 的 Pi（已验证 Pi 1.5.2）。CLI 要先在终端自行登录，Pi 不会替你登录。
+## Requirements
 
-```powershell
-cd D:/ForWork/Documents/MyCode/pi-local-cli
+- Node.js 22 or newer.
+- A Pi build that registers native providers with an injectable `fetch` (tested with Pi 1.5.2).
+- At least one supported CLI, signed in from your own terminal.
+
+## Install
+
+```bash
+pi install git:github.com/ErkundenSie/pi-local-cli
+```
+
+From a local checkout:
+
+```bash
+git clone https://github.com/ErkundenSie/pi-local-cli
+cd pi-local-cli
 npm ci
-npm run doctor
-pi -e ./index.mjs
+pi install .
 ```
 
-进入 Pi 后输入 `/local-cli` 查看检测结果，输入 `/model` 搜索 `local-cli`。模型列表只显示已检测到的 CLI；`-default` 让 CLI 决定用什么模型。Pi 刷新模型目录时也会试着获取 CLI 暴露的原生模型；失败时仍保留默认项。检测到可执行文件不代表已经登录或通过兼容性测试。
+Try it for one session without installing:
 
-要让插件在其他工作目录也自动加载：
-
-```powershell
-pi install "D:/ForWork/Documents/MyCode/pi-local-cli"
+```bash
+pi -e /absolute/path/to/pi-local-cli/index.mjs
 ```
 
-不安装也可以从任意目录用 `pi -e "D:/ForWork/Documents/MyCode/pi-local-cli/index.mjs"` 临时加载。只需回复、不向模型提供 Pi 工具时，可以用：
+Then run `/local-cli` to see what was detected, and `/model` to pick a `local-cli/*` entry.
 
-```powershell
-pi -e ./index.mjs --provider local-cli --model antigravity-default --no-tools -p "用一句话解释 ACP"
+### In Pi Web
+
+Restart the Pi Web server, open **Settings → Models → Local CLI** (no API key is needed), click **Refresh model catalog**, enable the models you want and **Save**. New models are not added to an existing `enabledModels` allow-list automatically.
+
+`Antigravity (agy)` and `xAI (Grok/X subscription)` in that list are separate providers, not this extension's `Local CLI`.
+
+## Model names
+
+```
+local-cli/<agent>-<native model id>   e.g. local-cli/codex-gpt-6.2-sol
+local-cli/<agent>-default             let the CLI pick its own model
 ```
 
-### 在 Pi Web 里启用
+Model discovery runs through the same protocol Pi uses for chat, so no extra login or API key is involved. When a CLI reports no catalog, only its `-default` entry appears.
 
-重启 Pi Web 服务后，打开 **设置 → 模型 → Local CLI**。这里不需要填 API Key。点击 **刷新模型目录**，插件会查询 CLI 并缓存实际返回的具体模型；查询失败时保留上次的目录。打开所需模型的开关，再点右下角 **保存**；然后回到聊天，点击输入框下方的当前模型名称进行切换。已有 `enabledModels` 白名单时，新模型不会自动勾选。
+## Commands
 
-`Antigravity (agy)` 和 `xAI (Grok/X subscription)` 是单独的 provider，不是本插件的 `Local CLI`。
+| Command | Purpose |
+|---|---|
+| `/local-cli` | Detected executables |
+| `/local-cli status` | What the current session's last turn is doing |
+| `/local-cli doctor` | Executables, catalog source, last success and last failure |
+| `/local-cli doctor probe` | Query catalogs now (no inference, does not change enabled models) |
+| `/local-cli usage` | Context occupancy, last-inference usage and turn total |
 
-## 诊断和用量
+## Configuration
 
-- `/local-cli doctor`：查看可执行文件、模型目录来源、上次成功时间，以及当前进程最近一次查询失败的简要原因。
-- `/local-cli doctor probe`：主动查询目录，不发起推理，不修改模型启用列表。Antigravity 的 ACP 目录不可用时回退到 `agy models` 查询；聊天仍通过 ACP。
-- `/local-cli usage`：查看当前会话最近一轮的统计。Codex 给 Pi 的用量使用最近一次推理的计数来估算上下文；整轮累计（含多次推理）单独显示在命令结果中，不进入 Pi 的上下文计算。若 ACP 上报了上下文占用，命令优先显示该值；没有就标为估算。Pi Web 顶栏没有独立的累计用量与占用字段，不能把它当作精确账单。统计仅保存在当前会话运行时。
-
-如果 Grok Build 返回 `HTTP 402`，请在 Grok Build CLI 中检查登录账号的用量余额与账单。这与模型发现、Pi 的 API Key 或会话恢复无关。
-
-## 长工具调用
-
-推理时间最多 5 分钟（同一原生轮次内累计），等待 Pi 工具时暂停；每次等待单独最多 10 分钟，并受本地 CLI 自身更短的限制约束。Pi Web 会提示进入等待或失去回传连接，也可用 `/local-cli status` 查看。收到结果后只有原来的 CLI 轮次可以续接；若连接已断、等待过期或被取消，插件**不会自动重放**。先检查 Pi 中已执行的工具结果，再决定是否显式发一条新消息继续。未完成的工具调用不支持跨重启恢复。
-
-## 找不到 CLI？
-
-默认查找 PATH、常见安装目录和 Windows Codex Desktop 的可执行文件。把 `.local-agents.example.json` 复制为同目录的 `.local-agents.json`，删掉不需要的条目，改成真实绝对路径。也可把环境变量 `PI_LOCAL_CLI_CONFIG` 设为另一个配置文件的绝对路径。改好后重启 Pi 或在正式安装后使用 `/reload`。
+Executables are resolved from `PATH`, common install locations, and the Codex Desktop bundle on Windows. To pin a path, copy `.local-agents.example.json` to `.local-agents.json` next to `index.mjs`:
 
 ```json
 {
@@ -64,42 +98,101 @@ pi -e ./index.mjs --provider local-cli --model antigravity-default --no-tools -p
 }
 ```
 
-Windows 优先用 `.exe`，也支持能解析到 JS 入口的标准 npm `.cmd`，不用 `cmd.exe` 拼接命令。需要前置参数时，可写 `{"path":"D:/Tools/node.exe","args":["D:/Tools/cli-entry.mjs"]}`。Claude Code 本体须用原生可执行文件；ACP 适配器可用 npm 安装：
+Keep only the entries you need. Windows prefers `.exe`, also accepts a standard npm `.cmd` shim (resolved to its JavaScript entry point, never through `cmd.exe`), and supports prefix arguments:
 
-```powershell
-npm install -g @agentclientprotocol/claude-agent-acp
+```json
+{ "path": "D:/Tools/node.exe", "args": ["D:/Tools/cli-entry.mjs"] }
 ```
 
-配置属于插件用户，不从当前项目读取可执行文件覆盖。只配置你信任的二进制和脚本；它们以当前用户身份运行。插件沿用上游对非原生推理路由的检查；如已有自定义转发配置，CLI 可能需要先切回其官方路由。
+Claude Code itself must be a native executable; only the ACP adapter may be an npm shim.
 
-## 迁移范围
+| Environment variable | Effect |
+|---|---|
+| `PI_LOCAL_CLI_CONFIG` | Absolute path to an alternative executable config |
+| `PI_LOCAL_CLI_AGY_RESUME=0` | Disable on-disk Antigravity checkpoints; keep in-process reuse only |
 
-- 复用 Codex App Server 与 ACP 会话层、流式输出、CLI 上报的 token 用量和 MCP 工具回传。图片需要 CLI 声明支持，整个请求上限为 2 MiB（含 Base64 和历史）。
-- CLI 在临时目录启动，插件限制其原生工具并拒绝无关的权限请求；不把项目目录作为 CLI 工作目录。**这不是通用 OS 沙箱。** 模型仍可请求当前 Pi 会话已开放的工具，最终由 Pi 按自己的工具权限和扩展规则执行。
-- Chat Completions 是进程内适配，不对外提供 HTTP API。工具回传使用按需启动的、随机端口的本机回环 MCP 中继，按 CLI 会话使用随机令牌。不迁移 Magpie 页面与订阅额度界面。
-- CLI 会话在同一个 Pi 会话内、模型/思考级别/工具声明相同且历史匹配时复用；不匹配时重放历史。具体 Codex 型号的上下文窗口从 Codex 自己的 `models_cache.json` 读取 `context_window`，不使用更高的 `max_context_window`。读不到匹配的目录条目时仍显示 128,000 的兜底值；输出上限也是估计，实际限制由 CLI 和供应商决定。
+The executable config belongs to the extension user. It is never read from the project being worked on: only configure binaries and scripts you trust, because they run as you.
 
-## Antigravity 会话恢复
+## How it works
 
-每轮正常完成后，插件会保持原生进程可供下一轮复用，并把带所有权标记的恢复点保存在 Pi 的 agent 目录下的 `local-cli/agy-checkpoints`（通常是 `~/.pi/agent/local-cli/agy-checkpoints`）。只写会话 ID、模型、时间与历史/工具配置指纹，不另存聊天正文、工具结果、图片或令牌。agy 自己的会话历史仍由 CLI 管理。
+```
+Pi  ──Chat Completions──▶  in-process adapter  ──stdio JSON-RPC──▶  codex app-server / agy acp / grok agent / claude-agent-acp
+ ▲                                                                                    │
+ └──────────────── Pi tool bridge (loopback MCP, random port + token) ◀───────────────┘
+```
 
-同一 Pi 会话在重启后继续聊天时，只有上一轮正常完成、原宿主进程已退出（或干净释放了所有权），且模型、设置、工具清单和历史前缀均匹配，才恢复原生会话并发送新增消息。继续原生会话之前会先使旧恢复点失效，防止中断后的半轮历史被误恢复。恢复点有效期 6 小时。切换分支、压缩历史、升级 CLI 或恢复失败时会开新会话；等待中的工具调用不恢复、不重跑。设置 `PI_LOCAL_CLI_AGY_RESUME=0` 后重启可关闭该功能，仅使用原来的进程内复用。Grok 和 Claude Code 暂不使用磁盘恢复点。
+- Chat Completions is adapted in-process. There is no HTTP endpoint, and nothing listens for chat traffic.
+- The only listener is a loopback MCP bridge started on demand, bound to `127.0.0.1` on a random port with a per-session token. The CLI spawns the stdio shim that talks to it.
+- When the CLI calls a Pi tool, the native turn parks. Pi runs the tool in its own loop, then the result is handed back to the same parked call.
+- Each CLI runs in its own temporary directory with its built-in tools restricted; approval requests the extension cannot answer are declined.
 
-**Codex 仍只复用进程内线程。** 已在 Windows 上用 App Server 0.171.0 实测：`ephemeral: true` 的线程完成真实推理后没有磁盘记录，关闭 App Server 后 `thread/resume` 返回 `no rollout found`。因此插件保留临时线程；重启后从 Pi 已保存的对话历史新开线程，不会隐式启用 Codex 的持久化。
+### Timeouts
 
-## 代码结构
+Inference is capped at 5 minutes per native turn, measured only while the CLI is generating. Waiting for a Pi tool pauses that budget and has its own 10-minute limit, still bounded by any shorter CLI limit. Pi Web shows when a turn is waiting or has lost its bridge connection.
 
-- `index.mjs`：接入 Pi，注册 provider 和命令。
-- `lib/model-discovery.mjs`：探测可用 CLI、发现模型目录并记录诊断；`lib/catalog.mjs` 处理目录数据。
-- `lib/history.mjs`：统一计算历史及工具配置指纹、检查前缀、构造续接消息，不管理会话状态。
-- `lib/provider.mjs`：负责流式调用与会话状态，包括推理、等待工具、复用与恢复；`lib/session.mjs` 选择适配器：`lib/session/codex.mjs` 处理 Codex App Server，`lib/session/acp.mjs` 处理 Antigravity、Grok 和 Claude Code。两者共用 `lib/session/common.mjs` 的连接与审批辅助代码，以及 `lib/rpc.mjs` 的传输。
+If a result can no longer be delivered — bridge lost, wait expired, turn cancelled — the request fails instead of silently replaying. Check the tool output already in the conversation before sending a new message.
 
-## 验证
+### Antigravity checkpoints
 
-`npm test` 使用模拟 Codex App Server 和 ACP，不消耗账号额度。另用 Pi 的 print 模式验证了模型注册以及 CLI → MCP → Pi 工具 → CLI 的完整回传链路。
+After a completed `agy` turn, the native process is kept for reuse and a checkpoint is written under `<agentDir>/local-cli/agy-checkpoints` (usually `~/.pi/agent/local-cli/agy-checkpoints`, mode 0600). A checkpoint contains only the native session ID, model, timestamps and history/tool fingerprints — never messages, tool output, images or tokens.
 
-- `node scripts/smoke-agy-pi-web.mjs <Pi-Web-安装目录>`：在临时配置下启动和重启 Pi Web，验证同一会话接入新 MCP 桥、工具只执行一次。默认用模拟 ACP；加 `--live` 用本机真实 `agy`，会使用账号额度。
-- `node scripts/benchmark-agy.mjs 2`：比较禁用恢复与启用恢复时的连续回复延迟；加 `--cold-resume` 可测每轮重启 CLI 的代价。会使用 `agy` 额度，不打开工具。
-- `node scripts/probe-codex-resume.mjs [Codex 模型 ID]`：在临时目录和只读策略下运行一次短推理，重启 App Server 后尝试读取和恢复该临时线程。会使用 Codex 额度，不使用已有线程或打开工具。
+A restart resumes that native session only when the previous turn completed, the owning process is gone or has released its lease, and the model, settings, tool set and history prefix all match. The old checkpoint is invalidated before the native history is advanced, so a half-finished turn cannot be restored. Checkpoints expire after 6 hours. Branches, compaction, a CLI upgrade or a refused resume fall back to a fresh session with the history Pi already stores. Parked tool calls are never resumed.
 
-移植来源：[ErkundenSie/magpie-local-agents](https://github.com/ErkundenSie/magpie-local-agents/tree/9828f7ac6eb4d04e121ffb0efb9e17b1604dd40f)，MIT。保留上游 [LICENSE](./LICENSE)。
+Codex keeps in-process threads only: an `ephemeral: true` thread has no rollout on disk, so `thread/resume` after an App Server restart is impossible by design (verified on App Server 0.171.0). Grok and Claude Code do not use on-disk checkpoints yet.
+
+## Notes on behavior
+
+- Codex context windows come from Codex's own `models_cache.json` (`context_window`, not the higher optional `max_context_window`). Without a matching entry the extension falls back to 128,000, and output limits are estimates; the CLI and its vendor decide the real limits.
+- Images are forwarded only when the CLI advertises support, and the whole request — history plus inline base64 — is capped at 2 MiB.
+- Codex runs read-only, approval-free and ephemeral under this extension. Other CLIs keep their own configuration; native tools outside the caller's tool set are denied.
+- **This is not a general-purpose OS sandbox.** A model can still ask for tools the Pi session has enabled, and Pi decides how they run.
+- The MCP bridge is intended for a single-user developer machine: another process running as the same user could read the per-session token from the CLI's own configuration.
+- Subscription quota and billing remain the CLI vendor's business. If Grok Build returns `HTTP 402`, check the Grok Build account balance; it is unrelated to model discovery, Pi API keys or session resume.
+- Pi Web's header does not separate cumulative turn usage from context occupancy, so treat `/local-cli usage` as the more precise view. Usage is kept in memory for the current session only.
+
+## Troubleshooting
+
+| Symptom | Check |
+|---|---|
+| A CLI is missing from `/model` | `/local-cli doctor`, then `doctor probe`; pin the path in `.local-agents.json` if needed |
+| Only `-default` models appear | Refresh the catalog in Pi Web or run `/local-cli doctor probe`; the CLI may be signed out |
+| Antigravity model has no thinking levels | Discovery fell back to `agy models`, which fixes the model set but may not describe thinking levels |
+| Turn hangs while a tool runs | `/local-cli status`; the wait is bounded, and a lost bridge is reported rather than retried |
+| Resume never happens (Antigravity) | Turn must have completed, the history prefix must match, and the checkpoint must be under 6 hours old |
+
+## Development
+
+```bash
+npm ci
+npm test          # simulated Codex App Server and ACP; no account quota
+npm run doctor    # list detected executables
+```
+
+The suite covers streaming, usage, tool round-trips, cancellation, lost bridges and processes, checkpoint leases, resume matching and model discovery. Scripts that touch a real CLI or a real Pi Web spend real quota:
+
+```bash
+node scripts/smoke-agy-pi-web.mjs <pi-web-install-path>          # simulated ACP
+node scripts/smoke-agy-pi-web.mjs <pi-web-install-path> --live   # real agy
+node scripts/benchmark-agy.mjs 2 [--cold-resume]                 # reply latency
+node scripts/probe-codex-resume.mjs [codex-model-id]             # ephemeral thread resume
+```
+
+Layout:
+
+| Path | Purpose |
+|---|---|
+| `index.mjs` | Pi entry point: provider registration, commands, status reporting |
+| `lib/provider.mjs` | Turn lifecycle: model routing, parking, reuse, checkpoints |
+| `lib/model-discovery.mjs`, `lib/catalog.mjs` | Executable detection and catalog discovery |
+| `lib/history.mjs` | History/tool fingerprints, prefix matching, continuation prompts |
+| `lib/session.mjs`, `lib/session/*` | Codex App Server and ACP adapters over shared transport |
+| `lib/tool-bridge.mjs`, `lib/mcp-stdio.mjs`, `lib/bridge-server.mjs` | Loopback MCP tool bridge |
+| `lib/checkpoints.mjs` | Antigravity checkpoint storage and leases |
+
+## Credits
+
+Protocol handling and the MCP tool-bridge design are ported from [ErkundenSie/magpie-local-agents](https://github.com/ErkundenSie/magpie-local-agents) (MIT). The Magpie page plugin, gateway and subscription-quota UI are not included.
+
+## License
+
+[MIT](./LICENSE)
