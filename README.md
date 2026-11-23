@@ -143,7 +143,7 @@ Codex keeps in-process threads only: an `ephemeral: true` thread has no rollout 
 ## Notes on behavior
 
 - Codex context windows come from Codex's own `models_cache.json` (`context_window`, not the higher optional `max_context_window`). Without a matching entry the extension falls back to 128,000, and output limits are estimates; the CLI and its vendor decide the real limits.
-- Images are forwarded only when the CLI advertises support, and the whole request — history plus inline base64 — is capped at 2 MiB.
+- Images are forwarded only when the CLI advertises support. The adapter accepts up to 64 MiB per serialized request (including history, inline images and tools), with a 32 MiB text-transcript limit on what it actually sends to the CLI. These byte limits are separate from the model's token window. Oversized requests return HTTP 413 so Pi can attempt compaction.
 - Codex runs read-only, approval-free and ephemeral under this extension. Other CLIs keep their own configuration; native tools outside the caller's tool set are denied.
 - **This is not a general-purpose OS sandbox.** A model can still ask for tools the Pi session has enabled, and Pi decides how they run.
 - The MCP bridge is intended for a single-user developer machine: another process running as the same user could read the per-session token from the CLI's own configuration.

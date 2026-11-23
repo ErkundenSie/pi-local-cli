@@ -228,6 +228,42 @@ test('rejects tool requests without a live MCP bridge', async (t) => {
   assert.match((await res.json()).error.message, /cannot serve tools/);
 });
 
+test('forwards history and inline images that exceed the old 2 MiB limit', async (t) => {
+  const { chat } = await harness(t);
+  const png = Buffer.alloc(2 * 1024 * 1024, 1).toString('base64');
+  const res = await chat({ messages: [{ role: 'user', content: [
+    { type: 'text', text: 'probe' },
+    { type: 'image_url', image_url: { url: `data:image/png;base64,${png}` } },
+  ] }] });
+  assert.equal(res.status, 200);
+  assert.equal((await res.json()).choices[0].message.content, 'text,image:data:image/png;base64,');
+});
+
+test('distinguishes oversized requests and transcripts from malformed JSON', async (t) => {
+  const { chat, backend } = await harness(t);
+  const endpoint = `${baseURL}/chat/completions`;
+  const malformed = await backend.fetch(endpoint, { method: 'POST', body: '{' });
+  assert.equal(malformed.status, 400);
+  assert.match((await malformed.json()).error.message, /Malformed JSON/);
+  const body = await chat({ messages: [{ role: 'user', content: 'x'.repeat(64 * 1024 * 1024) }] });
+  assert.equal(body.status, 413);
+  assert.equal((await body.json()).error.code, 'request_too_large');
+  const text = await chat({ messages: [{ role: 'user', content: '界'.repeat(11_200_000) }] });
+  assert.equal(text.status, 413);
+  assert.match((await text.json()).error.message, /text transcript exceeds 32 MiB/);
+
+  const oversized = new ReadableStream({
+    start(controller) {
+      const chunk = new Uint8Array(33 * 1024 * 1024);
+      controller.enqueue(chunk);
+      controller.enqueue(chunk);
+      controller.close();
+    },
+  });
+  const streaming = await backend.fetch(new Request(endpoint, { method: 'POST', body: oversized, duplex: 'half' }));
+  assert.equal(streaming.status, 413);
+});
+
 test('returns quota failures and does not route unknown URLs to the network', async (t) => {
   const { chat, backend } = await harness(t);
   const limited = await chat({ messages: [{ role: 'user', content: 'rate limited' }], stream: true });

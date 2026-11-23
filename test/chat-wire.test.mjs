@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { parseChatRequest, serveChat } from '../lib/chat-wire.mjs';
+import { parseChatRequest, renderRequestPrompt, serveChat } from '../lib/chat-wire.mjs';
 
 const jsonReply = '{"content":"literal","tool_calls":[{"name":"lookup","arguments":{"query":"x"}}]}';
 const tool = { type: 'function', function: { name: 'lookup', parameters: { type: 'object' } } };
@@ -10,7 +10,7 @@ for (const stream of [false, true]) {
   for (const tools of [[], [tool]]) {
     test(`ordinary JSON stays text with ${tools.length ? 'MCP tools declared' : 'no tools'} (${stream ? 'SSE' : 'JSON'})`, async () => {
       const request = parseChatRequest({ model: 'fixture', messages, tools, stream });
-      assert.doesNotMatch(request.prompt, /raw JSON object of the form/);
+      assert.doesNotMatch(renderRequestPrompt(request), /raw JSON object of the form/);
       const response = await serveChat(request, async ({ emit }) => {
         emit(jsonReply);
         return { reason: 'end_turn' };
