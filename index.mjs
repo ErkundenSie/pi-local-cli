@@ -5,7 +5,6 @@ import { openAICompletionsApi } from '@earendil-works/pi-ai/compat';
 import { createBridgeServer } from './lib/bridge-server.mjs';
 import { catalogModels, restoreCatalog } from './lib/catalog.mjs';
 import { codexContextWindows } from './lib/codex-metadata.mjs';
-import { readAgyQuota } from './lib/agy-catalog.mjs';
 import { readCliQuotas } from './lib/cli-quota.mjs';
 import { listAgents } from './lib/launch.mjs';
 import { formatDiagnostics, formatUsage } from './lib/usage-display.mjs';
@@ -137,7 +136,6 @@ export default function (pi) {
         ctx.ui.notify('Checking CLI quota…', 'info');
         const signal = AbortSignal.timeout(12000);
         const quotas = await readCliQuotas(root, present.map(({ id }) => id), signal);
-        if (present.some(({ id }) => id === 'antigravity')) quotas.push(await readAgyQuota(root, signal));
         const reported = quotas.some((line) => line && !/quota: not (?:reported|available)/.test(line));
         const text = formatUsage(stats, estimate, { omitQuotaNote: reported });
         ctx.ui.notify([text, ...quotas].filter(Boolean).join('\n'), 'info');

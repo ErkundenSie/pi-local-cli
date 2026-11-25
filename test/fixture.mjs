@@ -1,7 +1,11 @@
 import { createInterface } from 'node:readline';
 
 const native = process.argv[2] === 'codex';
-if (process.argv[3] === 'catalog-fallback' && process.argv.at(-1) === 'models') {
+if (process.argv[2] === 'antigravity' && process.argv.includes('/usage')) {
+  process.stdout.write(JSON.stringify({ command: { name: 'usage', data: { groups: [
+    { name: 'Gemini', buckets: [{ window: '5h', remaining_fraction: 0.75 }] },
+  ] } } }), () => process.exit(0));
+} else if (process.argv[3] === 'catalog-fallback' && process.argv.at(-1) === 'models') {
   process.stdout.write('Fetching available models...\ngemini-3.8-flash-high\tGemini 3.8 Flash (High)\ngemini-3.8-flash-low\tGemini 3.8 Flash (Low)\n');
   process.exit(0);
 }
@@ -22,6 +26,9 @@ for await (const line of lines) {
       ? { userAgent: 'fixture' }
       : { protocolVersion: 1, promptCapabilities: { image: process.argv[3] === 'object-image' ? { supported: true } : process.argv[3] !== 'no-image' } }); break;
     case 'initialized': break;
+    case 'account/rateLimits/read': reply(id, { rateLimits: {
+      primary: { windowDurationMins: 300, usedPercent: 20 },
+    } }); break;
     case 'config/read': reply(id, { config: { model_provider: 'openai', openai_base_url: '' } }); break;
     case 'account/read': reply(id, { account: { type: 'chatgpt', email: 'fixture@example.invalid' }, requiresOpenaiAuth: true }); break;
     case 'session/new':
