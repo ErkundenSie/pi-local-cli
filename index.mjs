@@ -57,7 +57,6 @@ export default function (pi) {
     onProgress(caller, { phase, detail }) {
       const ctx = sessionContext;
       if (!ctx?.hasUI || ctx.sessionManager.getSessionId() !== caller) return;
-      ctx.ui.setStatus('local-cli', ['running', 'waiting', 'still-running'].includes(phase) ? `Local CLI: ${detail}` : undefined);
       if (phase === 'lost' || phase === 'error' || phase === 'cancelled') {
         ctx.ui.notify(`Local CLI: ${detail}`, phase === 'lost' ? 'warning' : 'error');
       }
@@ -137,13 +136,14 @@ export default function (pi) {
       }
       if (action === 'usage') {
         const stats = backend.lastUsage(ctx.sessionManager.getSessionId());
-        const estimate = ctx.model?.provider === providerId && ctx.model.id === stats?.model ? ctx.getContextUsage() : undefined;
+        const piModel = ctx.model?.provider === providerId ? ctx.model : undefined;
+        const estimate = stats && piModel?.id === stats.model ? ctx.getContextUsage() : undefined;
         const present = installed();
         ctx.ui.notify('Checking CLI quota…', 'info');
         const signal = AbortSignal.timeout(12000);
         const quotas = await readCliQuotas(root, present.map(({ id }) => id), signal);
         const reported = quotas.some((line) => line && !/quota: not (?:reported|available)/.test(line));
-        const text = formatUsage(stats, estimate, { omitQuotaNote: reported });
+        const text = formatUsage(stats, estimate, { piModel, omitQuotaNote: reported });
         ctx.ui.notify([text, ...quotas].filter(Boolean).join('\n'), 'info');
         return;
       }

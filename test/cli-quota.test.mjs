@@ -22,6 +22,7 @@ async function quotaFixture(t) {
     codex: { path: process.execPath, args: [fixture, 'codex'] },
     antigravity: { path: process.execPath, args: [fixture, 'antigravity'] },
     claude: join(root, 'missing-claude.exe'),
+    grok: { path: process.execPath, args: [fixture, 'grok'] },
   } }));
   return root;
 }
@@ -42,6 +43,12 @@ test('locked quota directories do not discard successful CLI results', async (t)
   for (const { options } of cleanup) {
     assert.ok(options.recursive && options.force && options.maxRetries > 0 && options.retryDelay > 0);
   }
+});
+
+test('Grok falls back to ACP billing and reports a fresh weekly quota', async (t) => {
+  const root = await quotaFixture(t);
+  const [quota] = await readCliQuotas(root, ['grok'], AbortSignal.timeout(12000));
+  assert.match(quota, /^Grok weekly: 100% left, resets /);
 });
 
 test('an unavailable probe does not reject the quota summary', async () => {

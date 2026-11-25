@@ -84,7 +84,7 @@ Model discovery runs through the same protocol Pi uses for chat, so no extra log
 | `/local-cli status` | What the current session's last turn is doing |
 | `/local-cli doctor` | Executables, catalog source, bridge, resume setting, and last turn |
 | `/local-cli doctor probe` | Query catalogs now (no inference, does not change enabled models) |
-| `/local-cli usage` | Context occupancy, last inference, turn total, and official CLI quota |
+| `/local-cli usage` | Pi context budget, CLI-reported context, token usage, and official CLI quota |
 
 ## Configuration
 
@@ -173,7 +173,7 @@ Pi  ──Chat Completions──▶  in-process adapter  ──stdio JSON-RPC─
 
 ### Timeouts
 
-Inference is capped at 5 minutes per native turn, measured only while the CLI is generating. Waiting for a Pi tool pauses that budget and has its own 10-minute limit, still bounded by any shorter CLI limit. Pi Web shows when a turn is waiting, still running after 20 seconds, or has lost its bridge connection.
+Inference is capped at 5 minutes per native turn, measured only while the CLI is generating. Waiting for a Pi tool pauses that budget and has its own 10-minute limit, still bounded by any shorter CLI limit. Use `/local-cli status` to check whether a turn is still running or waiting. Bridge failures still trigger a notification.
 
 If a result can no longer be delivered — bridge lost, wait expired, turn cancelled — the request fails instead of silently replaying. Check the tool output already in the conversation before sending a new message.
 
@@ -198,7 +198,7 @@ Codex keeps in-process threads only: an `ephemeral: true` thread has no rollout 
 - **This is not a general-purpose OS sandbox.** A model can still ask for tools the Pi session has enabled, and Pi decides how they run.
 - The MCP bridge is intended for a single-user developer machine: another process running as the same user could read the per-session token from the CLI's own configuration.
 - Subscription quota and billing remain the CLI vendor's business. If Grok Build returns `HTTP 402`, check the Grok Build account balance; it is unrelated to model discovery, Pi API keys or session resume.
-- Pi Web's header does not separate cumulative turn usage from context occupancy, so treat `/local-cli usage` as the more precise view. Usage is kept in memory for the current session only.
+- `/local-cli usage` shows Pi's context budget separately from the window and occupancy reported by the CLI. When the CLI doesn't report context, the command says so and labels estimates separately. The CLI's report does not change Pi's compaction budget. Usage is kept in memory for the current session only.
 
 ## Troubleshooting
 
