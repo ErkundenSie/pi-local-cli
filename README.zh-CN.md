@@ -187,10 +187,11 @@ Codex 只保留进程内线程：`ephemeral: true` 的线程没有磁盘 rollout
 ## 行为说明
 
 - 向 Pi 注册的上下文窗口按模型区分：
-  - **Antigravity CLI：** Gemini 4 Neon 按 [Antigravity 官方文档](https://antigravity.google/docs/models#gemini-4-neon)采用 512,000 tokens，即使本机面板显示更高；Gemini 4 Carbon、Argon、Hydrogen、Gemini 3.8 Flash 和 Claude Opus/Sonnet 5.5 按 Antigravity CLI 的 [`/context` 面板](https://antigravity.google/docs/cli/commands/context)采用 1,000,000。GPT-OSS 120B 使用 131,072。
+  - **Antigravity CLI：** Gemini 4 Neon 按 [Antigravity 官方文档](https://antigravity.google/docs/models#gemini-4-neon)采用 512,000 tokens，即使本机面板显示更高；Gemini 4 Carbon、Argon、Hydrogen、Gemini 3.8 Flash 和 Claude Opus/Sonnet 5.5 按 Antigravity CLI 的 [`/context` 面板](https://antigravity.google/docs/cli/commands/context)采用 1,000,000。GPT-OSS 120B 使用 131,072。[Orchestrator](https://antigravity.google/docs/models#orchestrator) 取规划模型与 Hydrogen 执行模型中较小的窗口：Carbon/Argon 为 1,000,000，Neon 为 512,000，即使本机面板三项都显示 1M。
   - **Codex / Grok Build：** 优先按型号从各自本地的 `models_cache.json` 读取 `context_window`，不采用 Codex 可选的 `max_context_window` 或 [Grok API 的上限](https://docs.x.ai/developers/pricing)替代 CLI 的值。对于已发现但缓存未提供窗口的 Codex 模型，GPT‑6.1 Sol/Terra 使用 500,000，GPT‑6 Sol/Luna 使用 272,000。
   - **Claude Code：** 明确选中的 Opus/Sonnet/Haiku 5.5 使用 [原生 1M 窗口](https://code.claude.com/docs/en/model-config#extended-context)；启动环境设了 `CLAUDE_CODE_DISABLE_1M_CONTEXT=1` 时使用 200,000。
-  - 默认别名和没有已知窗口的模型保留 128,000。以上数值用于 Pi 的上下文显示和压缩判断，不会改变 CLI 或供应商的实际限制；输出设置不变。
+  - 每个 `CLI default` 别名使用该 CLI 已发现模型中最小的窗口。没有发现任何模型时回退到 128,000；已发现但窗口未知的模型也按 128,000 参与计算。以上数值用于 Pi 的上下文显示和压缩判断，不会改变 CLI 或供应商的实际限制。
+- **单次请求的最大输出：** 所有模型（包括 `CLI default` 别名）向 Pi 注册的 `maxTokens` 都是 16,384 tokens。这是模型元数据，不是插件强制执行的输出上限：桥接层不会把 `max_tokens` 转发给原生 CLI，实际输出限制由 CLI 和供应商决定。
 - 只有 CLI 声明支持时才会转发图片。序列化请求（历史、内联图片与工具）上限 64 MiB；实际发给 CLI 的文本记录上限 32 MiB。这些是字节限制，与模型的 token 窗口独立。超限返回 HTTP 413，让 Pi 可以尝试压缩。
 - Codex 在本插件下以只读、免审批、临时线程运行。其他 CLI 保留自己的配置；调用方工具集之外的原生工具会被拒绝。
 - **这不是通用 OS 沙箱。** 模型仍可请求 Pi 会话已启用的工具，最终由 Pi 决定如何执行。

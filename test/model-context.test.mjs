@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { grokContextWindows, modelContextWindow } from '../lib/model-context.mjs';
+import { catalogContextWindows, grokContextWindows, modelContextWindow } from '../lib/model-context.mjs';
 
 const budget = (agent, id, windows) => modelContextWindow({ agent, id: `${agent}-${id}` }, windows);
 
@@ -17,9 +17,16 @@ test('uses Antigravity budgets for exact families and reasoning variants only', 
     assert.equal(budget('antigravity', id), tokens);
     assert.equal(budget('antigravity', `${id}-high`), tokens);
   }
-  for (const id of ['default', 'gemini-4-neon-preview', 'gemini-pro-orchestrator-neon']) {
+  for (const id of ['default', 'gemini-4-neon-preview']) {
     assert.equal(budget('antigravity', id), 128_000);
   }
+});
+
+test('budgets Antigravity Orchestrator by the planner and Hydrogen executor', () => {
+  assert.equal(budget('antigravity', 'gemini-pro-orchestrator'), 1_000_000);
+  assert.equal(budget('antigravity', 'gemini-pro-orchestrator-argon'), 1_000_000);
+  assert.equal(budget('antigravity', 'gemini-pro-orchestrator-neon'), 512_000);
+  assert.equal(budget('antigravity', 'gemini-pro-orchestrator-preview'), 128_000);
 });
 
 test('keeps CLI defaults and unknown models conservative', () => {
@@ -30,6 +37,29 @@ test('keeps CLI defaults and unknown models conservative', () => {
   assert.equal(budget('claude', 'claude-opus-5-5'), 1_000_000);
   assert.equal(budget('claude', 'claude-opus-5-5', { claudeOneMillionDisabled: true }), 200_000);
   assert.equal(budget('claude', 'opus'), 128_000);
+});
+
+test('CLI default aliases use their own discovered catalog minimum, not cached-only entries', () => {
+  const rows = [
+    { agent: 'codex', id: 'codex-default' },
+    { agent: 'grok', id: 'grok-default' },
+    { agent: 'antigravity', id: 'antigravity-default' },
+    { agent: 'claude', id: 'claude-default' },
+    { agent: 'codex', id: 'codex-gpt-6.2-sol' },
+    { agent: 'grok', id: 'grok-grok-4.7' },
+    { agent: 'antigravity', id: 'antigravity-gemini-4-neon' },
+    { agent: 'codex', id: 'codex-gpt-6.2-astra' },
+    { agent: 'antigravity', id: 'antigravity-gpt-oss-120b-medium' },
+  ];
+  const windows = {
+    codex: new Map([['gpt-6.2-sol', 500_000], ['gpt-6.2-astra', 272_000], ['hidden', 64_000]]),
+    grok: new Map([['grok-4.7', 256_000]]),
+  };
+  assert.deepEqual(catalogContextWindows(rows, windows), [
+    272_000, 256_000, 131_072, 128_000, 500_000, 256_000, 512_000, 272_000, 131_072,
+  ]);
+  const unknown = { agent: 'grok', id: 'grok-unknown' };
+  assert.deepEqual(catalogContextWindows([rows[1], rows[5], unknown], windows), [128_000, 256_000, 128_000]);
 });
 
 test('uses Codex fallbacks for known older models only when the CLI cache has no entry', () => {

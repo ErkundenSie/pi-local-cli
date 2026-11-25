@@ -7,7 +7,7 @@ import { catalogModels, restoreCatalog } from './lib/catalog.mjs';
 import { codexContextWindows } from './lib/codex-metadata.mjs';
 import { readCliQuotas } from './lib/cli-quota.mjs';
 import { listAgents } from './lib/launch.mjs';
-import { grokContextWindows, modelContextWindow } from './lib/model-context.mjs';
+import { catalogContextWindows, grokContextWindows } from './lib/model-context.mjs';
 import { formatDiagnostics, formatUsage } from './lib/usage-display.mjs';
 import { baseURL, createBackend, providerId } from './lib/provider.mjs';
 
@@ -22,7 +22,7 @@ const compat = {
   maxTokensField: 'max_tokens',
 };
 
-function piModel({ id, name, agent, efforts }, windows) {
+function piModel({ id, name, agent, efforts }, contextWindow) {
   const thinkingLevelMap = efforts?.length
     ? Object.fromEntries(['minimal', 'low', 'medium', 'high', 'xhigh', 'max']
       .map((level) => [level, efforts.includes(level) ? level : null]))
@@ -31,7 +31,7 @@ function piModel({ id, name, agent, efforts }, windows) {
     type: 'chat', id, name, provider: providerId, api: 'openai-completions',
     baseUrl: baseURL, compat, reasoning: true, thinkingLevelMap,
     input: ['text', 'image'],
-    contextWindow: modelContextWindow({ agent, id }, windows),
+    contextWindow,
     maxTokens: 16384,
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
   };
@@ -43,7 +43,8 @@ function toPiModels(rows) {
     grok: rows.some(({ agent }) => agent === 'grok') ? grokContextWindows() : undefined,
     claudeOneMillionDisabled: process.env.CLAUDE_CODE_DISABLE_1M_CONTEXT === '1',
   };
-  return rows.map(row => piModel(row, windows));
+  const contextWindows = catalogContextWindows(rows, windows);
+  return rows.map((row, i) => piModel(row, contextWindows[i]));
 }
 
 export default function (pi) {
